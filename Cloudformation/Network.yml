@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Resources:
+  vpcNginx:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: vpcNginx
+        - Key: ManageBy
+          Value: "Cloudformation"
+        - Key: Environment
+          Value: "Dev"
+
+  subnetPublicNginx:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs:
+            Ref: "AWS::Region"
+      VpcId: !Ref vpcNginx
+      CidrBlock: "10.0.1.0/24"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: subnetPublicNginx
+        - Key: ManageBy
+          Value: "Cloudformation"
+        - Key: Environment
+          Value: "Dev"
+
+  subnetPrivateNginx:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs:
+            Ref: "AWS::Region"
+      VpcId: !Ref vpcNginx
+      CidrBlock: "10.0.2.0/24"
+      Tags:
+        - Key: Name
+          Value: subnetPrivateNginx
+        - Key: ManageBy
+          Value: "Cloudformation"
+        - Key: Environment
+          Value: "Dev"
+
+  igwNginx:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: igwNginx
+        - Key: ManageBy
+          Value: "Cloudformation"
+        - Key: Environment
+          Value: "Dev"
+
+  attachGatewayNginx:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref vpcNginx
+      InternetGatewayId: !Ref igwNginx
+
+  routeTableNginx:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref vpcNginx
+      Tags:
+        - Key: Name
+          Value: routeTableNginx
+        - Key: ManageBy
+          Value: "Cloudformation"
+        - Key: Environment
+          Value: "Dev"
+
+  routeIgIpv4Nginx:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref routeTableNginx
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref igwNginx
+
+  routeIgIpv6Nginx:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref routeTableNginx
+      DestinationIpv6CidrBlock: "::/0"
+      GatewayId: !Ref igwNginx
+
+  routeTableAssocNginx:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref subnetPublicNginx
+      RouteTableId: !Ref routeTableNginx
+
+  sgNginx:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "Nginx security group"
+      GroupDescription: "Security group to allow inbound connection to Nginx server"
+      VpcId: !Ref vpcNginx
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "0.0.0.0/0"
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Name
+          Value: sgNginx
+        - Key: ManageBy
+          Value: "Cloudformation"
+        - Key: Environment
+          Value: "Dev"
+
+  niNginx:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: "Interface for controlling traffic such as SSH"
+      GroupSet:
+        - !Ref sgNginx
+      SubnetId: !Ref subnetPublicNginx
+      SourceDestCheck: true
+      Tags:
+        - Key: Name
+          Value: niNginx
+        - Key: ManageBy
+          Value: "Cloudformation"
+        - Key: Environment
+          Value: "Dev"
+
+Outputs:
+  vpcNginxId:
+    Description: "Vpc Id"
+    Value: !Ref vpcNginx
+    Export:
+      Name: !Sub "${AWS::StackName}-VpcId"
+
+  subnetPublicNginxId:
+    Description: "Public subnet Id"
+    Value: !Ref subnetPublicNginx
+    Export:
+      Name: !Sub "${AWS::StackName}-SubnetId"
+
+  networkInterface:
+    Description: "Network interface Id"
+    Value: !Ref niNginx
+    Export:
+      Name: !Sub "${AWS::StackName}-NetworkInterfaceId"
